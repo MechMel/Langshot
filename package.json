@@ -1,0 +1,19 @@
+{
+  "name": "langshot",
+  "version": "0.0.0",
+  "description": "A scripting language framework build on TypeScript.",
+  "main": "dist/Langshot.js",
+  "scripts": {
+    "build": "tsc",
+    "pub": "sucrase-node pub.js",
+    "pub:prod": "sucrase-node pub.js --prod"
+  },
+  "keywords": [],
+  "author": "Monode Dev Tools",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "prettier": "^3.2.5",
+    "semver": "^7.6.0"
+  }
+}

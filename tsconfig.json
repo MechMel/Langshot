@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "baseUrl": ".",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "allowJs": true,
+    "types": ["node"],
+    "lib": ["ESNext"],
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "noEmit": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true
+  }
+}
