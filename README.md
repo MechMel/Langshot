@@ -1,6 +1,6 @@
 # Langshot
 
-We found a slick way to make strongly typed parsers in TypeScript, and are building a language extension framework around it. Very much a work in progress.
+A strongly-typed language extension framework. We found a slick way to make strongly typed parsers in TypeScript, and are building a language extension framework around it. Very much a work in progress.
 
 ### Getting Started
 

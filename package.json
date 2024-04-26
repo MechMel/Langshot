@@ -1,6 +1,6 @@
 {
   "name": "langshot",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Build strongly typed language extension using TypeScript.",
   "main": "dist/Langshot.js",
   "scripts": {
