@@ -1,8 +1,12 @@
 {
   "name": "langshot",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Build strongly typed language extension using TypeScript.",
   "main": "dist/Langshot.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/monode-dev/Langshot.git"
+  },
   "scripts": {
     "build": "tsc",
     "pub": "sucrase-node pub.js",
