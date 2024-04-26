@@ -1,33 +1,30 @@
-import { AstNode, many, optional, token } from "./Langshot";
+import { AstNode, token, and, or, optional, many } from "./Langshot";
+
+class File extends AstNode.from(() => ({
+  statements: many(Statement),
+})) {}
 
 class Statement extends AstNode.from(() => ({
-  statement: CodeBlock,
-  separator: optional(token(`Separator`, /,|;/)),
+  statement: or([IdentDef, CodeBlock]),
+  trailingSeparators: many(token(`Separator`, /,|;/)),
 })) {
   iAmAStatement = true;
   test() {
     console.log(this.statement);
   }
 }
-class Ident extends AstNode.from(() => ({
-  token: token(`Ident`, /_*[A-Za-z][A-Za-z0-9_]*/),
-})) {
-  get ident() {
-    return this.token.contents;
-  }
+class IdentDef extends AstNode.from(() => ({
+  ident: Ident,
+  defOp: token(`DefOp`, /:|:=|:>/),
+  right: or([CodeBlock, Ident, LitNum, LitStr]),
+})) {}
+class Ident extends AstNode.from(() => /_*[A-Za-z][A-Za-z0-9_]*/) {
   get isTypeIdent() {
-    const firstLetter = this.ident.replace(/^_+/, "")[0];
+    const firstLetter = this.text.replace(/^_+/, "")[0];
     return firstLetter === firstLetter.toUpperCase();
   }
   get isInstIdent() {
     return !this.isTypeIdent;
-  }
-}
-class LitNum extends AstNode.from(() => ({
-  token: token(`LitNum`, /-?[0-9]+(\.[0-9]+)?/),
-})) {
-  get num() {
-    return parseFloat(this.token.contents);
   }
 }
 class CodeBlock extends AstNode.from(() => ({
@@ -37,7 +34,7 @@ class CodeBlock extends AstNode.from(() => ({
   closeParen: token(`CloseParen`, /\)/),
 })) {
   test() {
-    console.log(this.openParen.contents.startsWith("("));
+    console.log(this.openParen.text.startsWith("("));
     for (const statement of this.statements) {
       console.log(statement.statement);
       console.log(statement.iAmAStatement);
@@ -45,4 +42,14 @@ class CodeBlock extends AstNode.from(() => ({
     }
   }
 }
-console.log(JSON.stringify(CodeBlock.parse("((),)"), null, 2));
+class LitNum extends AstNode.from(() => /-?[0-9]+(\.[0-9]+)?/) {
+  get asFloat() {
+    return parseFloat(this.text);
+  }
+}
+class LitStr extends AstNode.from(() => /"([^"\\]*(\\.[^"\\]*)*)"/) {
+  get asString() {
+    return this.text.slice(1, -1);
+  }
+}
+console.log(JSON.stringify(File.parse("(( a: 5; ),)"), null, 2));
