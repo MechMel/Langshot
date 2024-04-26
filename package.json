@@ -1,7 +1,7 @@
 {
   "name": "langshot",
-  "version": "0.0.2",
-  "description": "A scripting language framework build on TypeScript.",
+  "version": "0.0.3",
+  "description": "Build strongly typed language extension using TypeScript.",
   "main": "dist/Langshot.js",
   "scripts": {
     "build": "tsc",
