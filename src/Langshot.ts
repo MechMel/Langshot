@@ -105,7 +105,9 @@ export type AndPattern = ParsePattern<
 >;
 export type ParsedAnd<T extends AndPattern> = {
   [K in keyof T[`match`]]: ParsedPattern<T[`match`][K]>;
-} & AstNode;
+} & AstNode & {
+    readonly foreach: (handler: (astNode: AstNode) => void) => void;
+  };
 export function and<NodeType, T>(
   nodeType: NodeType,
   match: T,
@@ -147,13 +149,14 @@ function _parseAnd(config: {
     });
     if (Array.isArray(parseResult)) children.push(...parseResult);
     else if (parseResult !== null) children.push(parseResult);
+    const firstNode = Array.isArray(parseResult) ? parseResult[0] : parseResult;
     const lastNode = Array.isArray(parseResult)
       ? parseResult[parseResult.length - 1]
       : parseResult;
     parseIndex = lastNode?.endIndex ?? parseIndex;
     newNode.startIndex = Math.min(
       newNode.startIndex,
-      lastNode?.startIndex ?? Number.POSITIVE_INFINITY,
+      firstNode?.startIndex ?? Number.POSITIVE_INFINITY,
     );
     newNode.endIndex = Math.max(
       newNode.endIndex,
