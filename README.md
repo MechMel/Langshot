@@ -27,7 +27,7 @@ class File extends AstNode.from(() => ({
 }
 
 class Statement extends AstNode.from(() => ({
-  statement: or([VarDef, VarAssign]),
+  statement: or(VarDef, VarAssign),
   separator: optional(token(`Separator`, /;/)),
 })) {}
 
@@ -35,7 +35,7 @@ class VarDef extends AstNode.from(() => ({
   modifier: token(`Modifier`, /var|let|const/),
   ident: Ident,
   defOp: AssignOp,
-  initValue: or([Ident, LitNum, LitStr]),
+  initValue: or(Ident, LitNum, LitStr),
 })) {
   get isConst() {
     return this.modifier.text === "const";
@@ -45,7 +45,7 @@ class VarDef extends AstNode.from(() => ({
 class VarAssign extends AstNode.from(() => ({
   ident: Ident,
   assignOp: AssignOp,
-  value: or([Ident, LitNum, LitStr]),
+  value: or(Ident, LitNum, LitStr),
 })) {}
 
 class AssignOp extends AstNode.from(() => /=/) {}

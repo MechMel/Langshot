@@ -4,17 +4,21 @@ export type ParsePattern<Format extends string, Match> = {
   readonly match: Match;
   parse(fileString: string, startIndex?: number): null | AstNode | AstNode[];
 };
-export type ParsedPattern<T> = T extends TokenPattern
-  ? ParsedToken<T>
-  : T extends AstNodePattern
-    ? ParsedAstNode<T>
+export type ParsedPattern<T> = T extends AstNodePattern
+  ? ParsedAstNode<T>
+  : T extends TokenPattern
+    ? ParsedToken<T>
     : T extends AndPattern
       ? ParsedAnd<T>
-      : T extends ManyPattern
-        ? ParsedMany<T>
-        : T extends BrokenAstNodePattern
-          ? AstNode
-          : never;
+      : T extends OrPattern
+        ? ParsedOr<T>
+        : T extends OptionalPattern
+          ? ParsedOptional<T>
+          : T extends ManyPattern
+            ? ParsedMany<T>
+            : T extends BrokenAstNodePattern
+              ? AstNode
+              : never;
 
 // SECTION: AstNode
 type _classFormat = `class`;
@@ -87,6 +91,48 @@ export abstract class AstNode {
 //   column: number;
 //   index: number;
 // };
+
+// SECTION: Token
+export type tokenFormat = typeof tokenFormat;
+export const tokenFormat = "token";
+export type TokenPattern = ParsePattern<tokenFormat, RegExp>;
+export type ParsedToken<T extends TokenPattern> = {
+  text: string;
+  startIndex: number;
+  endIndex: number;
+} & AstNode;
+export function token<NodeType>(
+  nodeType: NodeType,
+  match: RegExp,
+): TokenPattern {
+  return class extends (AstNode.from(() => match) as any) {
+    static nodeType = nodeType;
+  } as any;
+}
+function _parseToken(config: {
+  nodeType: string;
+  match: RegExp;
+  fileString: string;
+  startIndex: number;
+}) {
+  // Skip leading whitespace
+  const whitespaceMatches = config.fileString
+    .substring(config.startIndex)
+    .match(/\s*/)?.[0];
+  config.startIndex += whitespaceMatches?.length ?? 0;
+
+  // Match the token
+  const text = config.fileString
+    .substring(config.startIndex)
+    .match(new RegExp(`^${config.match.source}`))?.[0];
+  if (text === undefined) throw new Error(`Could not parse token`);
+  return {
+    // nodeType: config.nodeType as any,
+    text,
+    startIndex: config.startIndex,
+    endIndex: config.startIndex + text.length,
+  };
+}
 
 // SECTION: And
 export type andFormat = typeof andFormat;
@@ -166,80 +212,6 @@ function _parseAnd(config: {
   return newNode;
 }
 
-// SECTION: Token
-export type tokenFormat = typeof tokenFormat;
-export const tokenFormat = "token";
-export type TokenPattern = ParsePattern<tokenFormat, RegExp>;
-export type ParsedToken<T extends TokenPattern> = {
-  text: string;
-  startIndex: number;
-  endIndex: number;
-} & AstNode;
-export function token<NodeType>(
-  nodeType: NodeType,
-  match: RegExp,
-): TokenPattern {
-  return class extends (AstNode.from(() => match) as any) {
-    static nodeType = nodeType;
-  } as any;
-}
-function _parseToken(config: {
-  nodeType: string;
-  match: RegExp;
-  fileString: string;
-  startIndex: number;
-}) {
-  // Skip leading whitespace
-  const whitespaceMatches = config.fileString
-    .substring(config.startIndex)
-    .match(/\s*/)?.[0];
-  config.startIndex += whitespaceMatches?.length ?? 0;
-
-  // Match the token
-  const text = config.fileString
-    .substring(config.startIndex)
-    .match(new RegExp(`^${config.match.source}`))?.[0];
-  if (text === undefined) throw new Error(`Could not parse token`);
-  return {
-    // nodeType: config.nodeType as any,
-    text,
-    startIndex: config.startIndex,
-    endIndex: config.startIndex + text.length,
-  };
-}
-
-// SECTION: Many
-export type manyFormat = typeof manyFormat;
-export const manyFormat = "many";
-export type ManyPattern = ParsePattern<
-  manyFormat,
-  AstNodePattern | BrokenAstNodePattern | AndPattern | OrPattern | TokenPattern
->;
-export type ParsedMany<T extends ManyPattern> = ParsedPattern<T["match"]>[];
-export function many<T>(match: T): ParsePattern<manyFormat, T> {
-  return {
-    format: manyFormat,
-    match,
-    parse(fileString: string, startIndex: number = 0) {
-      const newNodes: AstNode[] = [];
-      let endIndex = startIndex;
-      while (true) {
-        try {
-          const parseResult = (match as any).parse(fileString, endIndex);
-          if (parseResult === null) break;
-          else {
-            newNodes.push(parseResult);
-            endIndex = parseResult.endIndex;
-          }
-        } catch (e) {
-          break;
-        }
-      }
-      return newNodes;
-    },
-  };
-}
-
 // SECTION: Or
 export type orFormat = typeof orFormat;
 export const orFormat = "or";
@@ -249,7 +221,7 @@ export type OrPattern = ParsePattern<
 >;
 export type ParsedOr<T extends OrPattern> = ParsedPattern<T["match"][number]>;
 // TODO: Accept args like ...matches: T[]
-export function or<T>(matches: T): ParsePattern<orFormat, T> {
+export function or<T extends any[]>(...matches: T): ParsePattern<orFormat, T> {
   return {
     format: orFormat,
     match: matches,
@@ -284,6 +256,38 @@ export function optional<T>(match: T): ParsePattern<optionalFormat, T> {
       } catch (e) {
         return null;
       }
+    },
+  };
+}
+
+// SECTION: Many
+export type manyFormat = typeof manyFormat;
+export const manyFormat = "many";
+export type ManyPattern = ParsePattern<
+  manyFormat,
+  AstNodePattern | BrokenAstNodePattern | AndPattern | OrPattern | TokenPattern
+>;
+export type ParsedMany<T extends ManyPattern> = ParsedPattern<T["match"]>[];
+export function many<T>(match: T): ParsePattern<manyFormat, T> {
+  return {
+    format: manyFormat,
+    match,
+    parse(fileString: string, startIndex: number = 0) {
+      const newNodes: AstNode[] = [];
+      let endIndex = startIndex;
+      while (true) {
+        try {
+          const parseResult = (match as any).parse(fileString, endIndex);
+          if (parseResult === null) break;
+          else {
+            newNodes.push(parseResult);
+            endIndex = parseResult.endIndex;
+          }
+        } catch (e) {
+          break;
+        }
+      }
+      return newNodes;
     },
   };
 }
