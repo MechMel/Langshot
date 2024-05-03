@@ -1,6 +1,6 @@
-import { AstNode, token, and, or, optional, many } from "./Langshot";
+import { LangNode, token, and, or, optional, many } from "./Langshot";
 
-class File extends AstNode.from(() => ({
+class File extends LangNode.from(() => ({
   statements: many(`StatementList`, Statement),
 })) {
   // Add whatever getters, setters, and methods you want
@@ -20,12 +20,12 @@ class File extends AstNode.from(() => ({
   }
 }
 
-class Statement extends AstNode.from(() => ({
+class Statement extends LangNode.from(() => ({
   statement: or(VarDef, VarAssign, CodeBlock),
   separator: optional(token(`Separator`, /;/)),
 })) {}
 
-class VarDef extends AstNode.from(() => ({
+class VarDef extends LangNode.from(() => ({
   export: optional(token(`Export`, /export/)),
   modifier: token(`Modifier`, /var|let|const/),
   ident: Ident,
@@ -40,28 +40,28 @@ class VarDef extends AstNode.from(() => ({
   }
 }
 
-class VarAssign extends AstNode.from(() => ({
+class VarAssign extends LangNode.from(() => ({
   ident: Ident,
   assignOp: AssignOp,
   value: or(Ident, LitNum, LitStr),
 })) {}
 
-class AssignOp extends AstNode.from(() => /=/) {}
+class AssignOp extends LangNode.from(() => /=/) {}
 
-class Ident extends AstNode.from(() => /_*[A-Za-z][A-Za-z0-9_]*/) {}
+class Ident extends LangNode.from(() => /_*[A-Za-z][A-Za-z0-9_]*/) {}
 
-class LitNum extends AstNode.from(() => /-?[0-9]+(\.[0-9]+)?/) {
+class LitNum extends LangNode.from(() => /-?[0-9]+(\.[0-9]+)?/) {
   get asFloat() {
     return parseFloat(this.text);
   }
 }
 
-class LitStr extends AstNode.from(() => /"([^"\\]*(\\.[^"\\]*)*)"/) {
+class LitStr extends LangNode.from(() => /"([^"\\]*(\\.[^"\\]*)*)"/) {
   get asString() {
     return this.text.slice(1, -1);
   }
 }
-class CodeBlock extends AstNode.from(() => ({
+class CodeBlock extends LangNode.from(() => ({
   openParen: token(`OpenParen`, /\(/),
   statements: many(`StatementList`, Statement),
   closeParen: token(`CloseParen`, /\)/),

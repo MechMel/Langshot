@@ -4,8 +4,6 @@ A strongly-typed language extension framework. We found a slick way to make stro
 
 ### Quick Start
 
-
-
 ### A Simple Example
 
 Let's build a super simple parser to parse the following JavaScript snippet:
@@ -19,18 +17,18 @@ myNumber = 0;
 We can define a parser for this like so:
 
 ```ts
-import { AstNode, token, and, or, optional, many } from "./Langshot";
+import { LangNode, token, and, or, optional, many } from "./Langshot";
 
-class File extends AstNode.from(() => ({
+class File extends LangNode.from(() => ({
   statements: many(Statement),
 })) {}
 
-class Statement extends AstNode.from(() => ({
+class Statement extends LangNode.from(() => ({
   statement: or(VarDef, VarAssign),
   separator: optional(token(`Separator`, /;/)),
 })) {}
 
-class VarDef extends AstNode.from(() => ({
+class VarDef extends LangNode.from(() => ({
   modifier: token(`Modifier`, /var|let|const/),
   ident: Ident,
   defOp: AssignOp,
@@ -41,23 +39,23 @@ class VarDef extends AstNode.from(() => ({
   }
 }
 
-class VarAssign extends AstNode.from(() => ({
+class VarAssign extends LangNode.from(() => ({
   ident: Ident,
   assignOp: AssignOp,
   value: or(Ident, LitNum, LitStr),
 })) {}
 
-class AssignOp extends AstNode.from(() => /=/) {}
+class AssignOp extends LangNode.from(() => /=/) {}
 
-class Ident extends AstNode.from(() => /_*[A-Za-z][A-Za-z0-9_]*/) {}
+class Ident extends LangNode.from(() => /_*[A-Za-z][A-Za-z0-9_]*/) {}
 
-class LitNum extends AstNode.from(() => /-?[0-9]+(\.[0-9]+)?/) {
+class LitNum extends LangNode.from(() => /-?[0-9]+(\.[0-9]+)?/) {
   get asFloat() {
     return parseFloat(this.text);
   }
 }
 
-class LitStr extends AstNode.from(() => /"([^"\\]*(\\.[^"\\]*)*)"/) {
+class LitStr extends LangNode.from(() => /"([^"\\]*(\\.[^"\\]*)*)"/) {
   get asString() {
     return this.text.slice(1, -1);
   }

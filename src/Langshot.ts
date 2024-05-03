@@ -5,11 +5,11 @@ export type ParsePattern<Format extends string, Match> = {
   parse(
     fileString: string,
     startIndex?: number,
-    parent?: AstNode,
-  ): null | AstNode;
+    parent?: LangNode,
+  ): null | LangNode;
 };
-export type ParsedPattern<T> = T extends AstNodePattern
-  ? ParsedAstNode<T>
+export type ParsedPattern<T> = T extends LangNodePattern
+  ? ParsedLangNode<T>
   : T extends TokenPattern
     ? ParsedToken<T>
     : T extends AndPattern
@@ -20,30 +20,31 @@ export type ParsedPattern<T> = T extends AstNodePattern
           ? ParsedOptional<T>
           : T extends ManyPattern
             ? ParsedMany<T>
-            : T extends BrokenAstNodePattern
-              ? AstNode
+            : T extends BrokenLangNodePattern
+              ? LangNode
               : // TODO: Embed error messages in Symbols.
                 never;
 
-// SECTION: AstNode
+// SECTION: LangNode
 type _classFormat = `class`;
-export type AstNodePattern = ParsePattern<_classFormat, {}>;
-export type ParsedAstNode<T extends AstNodePattern> = T extends {
-  new (): AstNode;
+export type LangNodePattern = ParsePattern<_classFormat, {}>;
+export type ParsedLangNode<T extends LangNodePattern> = T extends {
+  new (): LangNode;
 }
   ? InstanceType<T>
   : {};
-export type BrokenAstNodePattern = { new (): any };
-export abstract class AstNode {
+export type BrokenLangNodePattern = { new (): any };
+export abstract class LangNode {
   static readonly format: `and` | `token` | `many` = `and`;
   static get nodeType() {
     return this.name;
   }
   readonly startIndex: number = -1;
   readonly endIndex: number = -1;
-  readonly foreach?: (handler: (astNode: AstNode) => void) => void;
+  // readonly upToPosition: DocumentPosition = { line: 0, column: 0, index: 0 };
+  readonly foreach?: (handler: (langNode: LangNode) => void) => void;
   constructor(readonly nodeType: string) {}
-  get parent(): AstNode | null {
+  get parent(): LangNode | null {
     return null;
   }
 
@@ -56,7 +57,7 @@ export abstract class AstNode {
     ? {
         readonly format: _classFormat;
         readonly match: ReturnType<T>;
-        parse<This extends { new (): AstNode }>(
+        parse<This extends { new (): LangNode }>(
           this: This,
           fileString: string,
           startIndex?: number,
@@ -74,7 +75,7 @@ export abstract class AstNode {
       }
     : never {
     let match: any = undefined;
-    return class NewNodeType extends AstNode {
+    return class NewNodeType extends LangNode {
       static get format() {
         return this.match instanceof RegExp
           ? tokenFormat
@@ -92,7 +93,7 @@ export abstract class AstNode {
         this: This,
         fileString: string,
         startIndex: number = 0,
-        parent: AstNode | null = null,
+        parent: LangNode | null = null,
       ) {
         const newInst = new this(this.nodeType);
         const parse = {
@@ -128,12 +129,12 @@ export type ParsedToken<T extends TokenPattern> = {
   text: string;
   startIndex: number;
   endIndex: number;
-} & AstNode;
+} & LangNode;
 export function token<NodeType>(
   nodeType: NodeType,
   match: RegExp,
 ): TokenPattern {
-  return class extends (AstNode.from(() => match) as any) {
+  return class extends (LangNode.from(() => match) as any) {
     static nodeType = nodeType;
   } as any;
 }
@@ -158,7 +159,7 @@ function _parseToken(config: {
     text,
     startIndex: config.startIndex,
     endIndex: config.startIndex + text.length,
-  } satisfies Omit<AstNode, `nodeType` | `parent`> & { text: string };
+  } satisfies Omit<LangNode, `nodeType` | `parent`> & { text: string };
 }
 
 // SECTION: And
@@ -168,8 +169,8 @@ export type AndPattern = ParsePattern<
   andFormat,
   {
     [key: string]:
-      | AstNodePattern
-      | BrokenAstNodePattern
+      | LangNodePattern
+      | BrokenLangNodePattern
       | ManyPattern
       | OptionalPattern
       | OrPattern
@@ -178,14 +179,14 @@ export type AndPattern = ParsePattern<
 >;
 export type ParsedAnd<T extends AndPattern> = {
   [K in keyof T[`match`]]: ParsedPattern<T[`match`][K]>;
-} & AstNode & {
-    readonly foreach: (handler: (astNode: AstNode) => void) => void;
+} & LangNode & {
+    readonly foreach: (handler: (langNode: LangNode) => void) => void;
   };
 export function and<NodeType, T>(
   nodeType: NodeType,
   match: T,
 ): ParsePattern<andFormat, T> {
-  return class extends (AstNode.from(() => match) as any) {
+  return class extends (LangNode.from(() => match) as any) {
     static nodeType = nodeType;
   } as any;
 }
@@ -194,7 +195,7 @@ function _parseAnd(config: {
   match: AndPattern["match"];
   fileString: string;
   startIndex: number;
-  thisNode: AstNode;
+  thisNode: LangNode;
 }) {
   const newNode = {
     // nodeType: config.nodeType as any,
@@ -202,13 +203,13 @@ function _parseAnd(config: {
     endIndex: Number.NEGATIVE_INFINITY,
     foreach(
       handler: (
-        astNode: AstNode,
+        langNode: LangNode,
       ) => void /**, options: { includeWhitespace: boolean } */,
     ) {
       children.forEach(handler);
     },
-  } satisfies Omit<AstNode, `nodeType` | `parent`>;
-  const children: AstNode[] = [];
+  } satisfies Omit<LangNode, `nodeType` | `parent`>;
+  const children: LangNode[] = [];
   let parseIndex = config.startIndex;
   console.log(config.nodeType);
   for (const [key, pattern] of Object.entries(config.match)) {
@@ -221,7 +222,7 @@ function _parseAnd(config: {
       config.fileString,
       parseIndex,
       config.thisNode,
-    ) as null | AstNode | AstNode[];
+    ) as null | LangNode | LangNode[];
     Object.assign(newNode, {
       get [key]() {
         return parseResult;
@@ -230,17 +231,17 @@ function _parseAnd(config: {
     if (Array.isArray(parseResult)) children.push(...parseResult);
     else if (parseResult !== null) children.push(parseResult);
     const firstNode = Array.isArray(parseResult) ? parseResult[0] : parseResult;
-    const lastNode = Array.isArray(parseResult)
+    const llangNode = Array.isArray(parseResult)
       ? parseResult[parseResult.length - 1]
       : parseResult;
-    parseIndex = lastNode?.endIndex ?? parseIndex;
+    parseIndex = llangNode?.endIndex ?? parseIndex;
     newNode.startIndex = Math.min(
       newNode.startIndex,
       firstNode?.startIndex ?? Number.POSITIVE_INFINITY,
     );
     newNode.endIndex = Math.max(
       newNode.endIndex,
-      lastNode?.endIndex ?? Number.NEGATIVE_INFINITY,
+      llangNode?.endIndex ?? Number.NEGATIVE_INFINITY,
     );
   }
   return newNode;
@@ -252,13 +253,13 @@ export const manyFormat = "many";
 export type ManyPattern = ParsePattern<
   manyFormat,
   ManyMatch<
-    | AstNodePattern
-    | BrokenAstNodePattern
+    | LangNodePattern
+    | BrokenLangNodePattern
     | AndPattern
     | OrPattern
     | TokenPattern,
-    | AstNodePattern
-    | BrokenAstNodePattern
+    | LangNodePattern
+    | BrokenLangNodePattern
     | AndPattern
     | OrPattern
     | TokenPattern
@@ -269,7 +270,7 @@ export type ManyPattern = ParsePattern<
 export type ManyMatch<Pattern, Separator> =
   | [Pattern]
   | [Pattern, { separator?: Separator }];
-export type ParsedMany<T extends ManyPattern> = AstNode &
+export type ParsedMany<T extends ManyPattern> = LangNode &
   ParsedPattern<T["match"][0]>[];
 // TODO: Add support for separators
 export function many<NodeType, Pattern, Separator>(
@@ -279,7 +280,7 @@ export function many<NodeType, Pattern, Separator>(
     separator?: Separator;
   },
 ): ParsePattern<manyFormat, ManyMatch<Pattern, Separator>> {
-  return class extends (AstNode.from(() => [
+  return class extends (LangNode.from(() => [
     pattern,
     {
       separator: options?.separator,
@@ -290,15 +291,15 @@ export function many<NodeType, Pattern, Separator>(
 }
 function _parseMany(config: {
   nodeType: string;
-  match: ManyMatch<AstNodePattern, AstNodePattern>;
+  match: ManyMatch<LangNodePattern, LangNodePattern>;
   fileString: string;
   startIndex: number;
-  thisNode: AstNode;
+  thisNode: LangNode;
 }) {
-  const newNodes: AstNode[] = [];
+  const newNodes: LangNode[] = [];
   let endIndex = config.startIndex;
   while (true) {
-    let newNode: AstNode | null = null;
+    let newNode: LangNode | null = null;
     try {
       newNode = config.match[0].parse(config.fileString, endIndex);
     } catch (e) {}
@@ -307,7 +308,7 @@ function _parseMany(config: {
     newNodes.push(newNode);
     if (config.match[1]?.separator) {
       while (true) {
-        let separator: AstNode | null = null;
+        let separator: LangNode | null = null;
         try {
           separator = config.match[1]?.separator.parse(
             config.fileString,
@@ -319,6 +320,12 @@ function _parseMany(config: {
       }
     }
   }
+  Object.defineProperty(newNodes, `startIndex`, {
+    value: config.startIndex,
+  });
+  Object.defineProperty(newNodes, `endIndex`, {
+    value: endIndex,
+  });
   return newNodes;
 }
 
@@ -327,14 +334,14 @@ export type orFormat = typeof orFormat;
 export const orFormat = "or";
 export type OrPattern = ParsePattern<
   orFormat,
-  (AstNodePattern | BrokenAstNodePattern | AndPattern | TokenPattern)[]
+  (LangNodePattern | BrokenLangNodePattern | AndPattern | TokenPattern)[]
 >;
 export type ParsedOr<T extends OrPattern> = ParsedPattern<T["match"][number]>;
 export function or<T extends any[]>(...matches: T): ParsePattern<orFormat, T> {
   return {
     format: orFormat,
     match: matches,
-    parse(fileString: string, startIndex?: number, parent?: AstNode) {
+    parse(fileString: string, startIndex?: number, parent?: LangNode) {
       for (const match of matches as any) {
         try {
           return match.parse(fileString, startIndex, parent) as any;
@@ -350,7 +357,11 @@ export type optionalFormat = typeof optionalFormat;
 export const optionalFormat = "optional";
 export type OptionalPattern = ParsePattern<
   optionalFormat,
-  AstNodePattern | BrokenAstNodePattern | AndPattern | OrPattern | TokenPattern
+  | LangNodePattern
+  | BrokenLangNodePattern
+  | AndPattern
+  | OrPattern
+  | TokenPattern
 >;
 export type ParsedOptional<T extends OptionalPattern> = ParsedPattern<
   T["match"]
@@ -359,7 +370,7 @@ export function optional<T>(match: T): ParsePattern<optionalFormat, T> {
   return {
     format: optionalFormat,
     match,
-    parse(fileString: string, startIndex?: number, parent?: AstNode) {
+    parse(fileString: string, startIndex?: number, parent?: LangNode) {
       try {
         return (match as any).parse(fileString, startIndex, parent);
       } catch (e) {
