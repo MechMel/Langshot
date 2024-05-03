@@ -1,11 +1,22 @@
 import { AstNode, token, and, or, optional, many } from "./Langshot";
 
 class File extends AstNode.from(() => ({
-  statements: many(Statement),
+  statements: many(`StatementList`, Statement),
 })) {
-  // You can put whatever you want in here and access the parsed tree via "this"
-  get lineCount() {
-    return this.statements.length;
+  // Add whatever getters, setters, and methods you want
+  get exports() {
+    const exportedVars: VarDef[] = [];
+    // Access the parse tree via "this"
+    for (const statement of this.statements) {
+      // Check node type via "instanceof"
+      if (!(statement.statement instanceof VarDef)) continue;
+
+      // You have complete access to your custom getters
+      if (statement.statement.isExported) {
+        exportedVars.push(statement.statement);
+      }
+    }
+    return exportedVars;
   }
 }
 
@@ -15,11 +26,15 @@ class Statement extends AstNode.from(() => ({
 })) {}
 
 class VarDef extends AstNode.from(() => ({
+  export: optional(token(`Export`, /export/)),
   modifier: token(`Modifier`, /var|let|const/),
   ident: Ident,
   defOp: AssignOp,
   initValue: or(Ident, LitNum, LitStr),
 })) {
+  get isExported() {
+    return this.export !== null;
+  }
   get isConst() {
     return this.modifier.text === "const";
   }
@@ -48,7 +63,7 @@ class LitStr extends AstNode.from(() => /"([^"\\]*(\\.[^"\\]*)*)"/) {
 }
 class CodeBlock extends AstNode.from(() => ({
   openParen: token(`OpenParen`, /\(/),
-  statements: many(Statement),
+  statements: many(`StatementList`, Statement),
   closeParen: token(`CloseParen`, /\)/),
 })) {}
 

@@ -2,7 +2,11 @@
 
 A strongly-typed language extension framework. We found a slick way to make strongly typed parsers in TypeScript, and are building a language extension framework around it. Very much a work in progress.
 
-### Getting Started
+### Quick Start
+
+
+
+### A Simple Example
 
 Let's build a super simple parser to parse the following JavaScript snippet:
 
@@ -19,12 +23,7 @@ import { AstNode, token, and, or, optional, many } from "./Langshot";
 
 class File extends AstNode.from(() => ({
   statements: many(Statement),
-})) {
-  // You can put whatever you want in here and access the parsed tree via "this"
-  get lineCount() {
-    return this.statements.length;
-  }
-}
+})) {}
 
 class Statement extends AstNode.from(() => ({
   statement: or(VarDef, VarAssign),

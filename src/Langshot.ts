@@ -2,7 +2,11 @@
 export type ParsePattern<Format extends string, Match> = {
   readonly format: Format;
   readonly match: Match;
-  parse(fileString: string, startIndex?: number): null | AstNode | AstNode[];
+  parse(
+    fileString: string,
+    startIndex?: number,
+    parent?: AstNode,
+  ): null | AstNode;
 };
 export type ParsedPattern<T> = T extends AstNodePattern
   ? ParsedAstNode<T>
@@ -18,7 +22,8 @@ export type ParsedPattern<T> = T extends AstNodePattern
             ? ParsedMany<T>
             : T extends BrokenAstNodePattern
               ? AstNode
-              : never;
+              : // TODO: Embed error messages in Symbols.
+                never;
 
 // SECTION: AstNode
 type _classFormat = `class`;
@@ -30,7 +35,7 @@ export type ParsedAstNode<T extends AstNodePattern> = T extends {
   : {};
 export type BrokenAstNodePattern = { new (): any };
 export abstract class AstNode {
-  static readonly format: `and` | `token` = `and`;
+  static readonly format: `and` | `token` | `many` = `and`;
   static get nodeType() {
     return this.name;
   }
@@ -38,8 +43,16 @@ export abstract class AstNode {
   readonly endIndex: number = -1;
   readonly foreach?: (handler: (astNode: AstNode) => void) => void;
   constructor(readonly nodeType: string) {}
+  get parent(): AstNode | null {
+    return null;
+  }
 
-  static from<T>(getMatch: T): T extends () => void
+  // TODO: Need a similar and elegant way to handle "or" and "many"
+  // NOTE: Maybe do many as () => many() and or as () => or()
+  static from<This, T>(
+    this: This,
+    getMatch: T,
+  ): T extends () => void
     ? {
         readonly format: _classFormat;
         readonly match: ReturnType<T>;
@@ -50,7 +63,11 @@ export abstract class AstNode {
         ): InstanceType<This>;
         new (): ParsedPattern<
           ParsePattern<
-            ReturnType<T> extends RegExp ? tokenFormat : andFormat,
+            ReturnType<T> extends RegExp
+              ? tokenFormat
+              : ReturnType<T> extends Array<any>
+                ? manyFormat
+                : andFormat,
             ReturnType<T>
           >
         >;
@@ -59,7 +76,11 @@ export abstract class AstNode {
     let match: any = undefined;
     return class NewNodeType extends AstNode {
       static get format() {
-        return this.match instanceof RegExp ? tokenFormat : andFormat;
+        return this.match instanceof RegExp
+          ? tokenFormat
+          : Array.isArray(this.match)
+            ? manyFormat
+            : andFormat;
       }
       static get match() {
         if (match === undefined) {
@@ -71,22 +92,29 @@ export abstract class AstNode {
         this: This,
         fileString: string,
         startIndex: number = 0,
+        parent: AstNode | null = null,
       ) {
         const newInst = new this(this.nodeType);
-        const parse = this.format === tokenFormat ? _parseToken : _parseAnd;
+        const parse = {
+          [tokenFormat]: _parseToken,
+          [andFormat]: _parseAnd,
+          [manyFormat]: _parseMany,
+        }[this.format];
         const parsed = parse({
           nodeType: this.nodeType,
           match: this.match,
           fileString,
           startIndex,
+          thisNode: newInst,
         });
         Object.assign(newInst, parsed);
+        Object.defineProperty(newInst, `parent`, { get: () => parent });
         return newInst;
       }
     } as any;
   }
 }
-// export type DocumentPosition = {
+// TODO: export type DocumentPosition = {
 //   line: number;
 //   column: number;
 //   index: number;
@@ -127,11 +155,10 @@ function _parseToken(config: {
     .match(new RegExp(`^${config.match.source}`))?.[0];
   if (text === undefined) throw new Error(`Could not parse token`);
   return {
-    // nodeType: config.nodeType as any,
     text,
     startIndex: config.startIndex,
     endIndex: config.startIndex + text.length,
-  };
+  } satisfies Omit<AstNode, `nodeType` | `parent`> & { text: string };
 }
 
 // SECTION: And
@@ -167,6 +194,7 @@ function _parseAnd(config: {
   match: AndPattern["match"];
   fileString: string;
   startIndex: number;
+  thisNode: AstNode;
 }) {
   const newNode = {
     // nodeType: config.nodeType as any,
@@ -179,15 +207,21 @@ function _parseAnd(config: {
     ) {
       children.forEach(handler);
     },
-  } satisfies Omit<AstNode, `nodeType`>;
+  } satisfies Omit<AstNode, `nodeType` | `parent`>;
   const children: AstNode[] = [];
   let parseIndex = config.startIndex;
+  console.log(config.nodeType);
   for (const [key, pattern] of Object.entries(config.match)) {
     //@ts-ignore
-    const parseResult = pattern.parse(config.fileString, parseIndex) as
-      | null
-      | AstNode
-      | AstNode[];
+    if (pattern.parse === undefined) {
+      console.log(key, pattern);
+    }
+    //@ts-ignore
+    const parseResult = pattern.parse(
+      config.fileString,
+      parseIndex,
+      config.thisNode,
+    ) as null | AstNode | AstNode[];
     Object.assign(newNode, {
       get [key]() {
         return parseResult;
@@ -212,6 +246,82 @@ function _parseAnd(config: {
   return newNode;
 }
 
+// SECTION: Many
+export type manyFormat = typeof manyFormat;
+export const manyFormat = "many";
+export type ManyPattern = ParsePattern<
+  manyFormat,
+  ManyMatch<
+    | AstNodePattern
+    | BrokenAstNodePattern
+    | AndPattern
+    | OrPattern
+    | TokenPattern,
+    | AstNodePattern
+    | BrokenAstNodePattern
+    | AndPattern
+    | OrPattern
+    | TokenPattern
+    | null
+    | unknown
+  >
+>;
+export type ManyMatch<Pattern, Separator> =
+  | [Pattern]
+  | [Pattern, { separator?: Separator }];
+export type ParsedMany<T extends ManyPattern> = AstNode &
+  ParsedPattern<T["match"][0]>[];
+// TODO: Add support for separators
+export function many<NodeType, Pattern, Separator>(
+  nodeType: NodeType,
+  pattern: Pattern,
+  options?: {
+    separator?: Separator;
+  },
+): ParsePattern<manyFormat, ManyMatch<Pattern, Separator>> {
+  return class extends (AstNode.from(() => [
+    pattern,
+    {
+      separator: options?.separator,
+    },
+  ]) as any) {
+    static nodeType = nodeType;
+  } as any;
+}
+function _parseMany(config: {
+  nodeType: string;
+  match: ManyMatch<AstNodePattern, AstNodePattern>;
+  fileString: string;
+  startIndex: number;
+  thisNode: AstNode;
+}) {
+  const newNodes: AstNode[] = [];
+  let endIndex = config.startIndex;
+  while (true) {
+    let newNode: AstNode | null = null;
+    try {
+      newNode = config.match[0].parse(config.fileString, endIndex);
+    } catch (e) {}
+    if (newNode === null) break;
+    endIndex = newNode?.endIndex ?? config.startIndex;
+    newNodes.push(newNode);
+    if (config.match[1]?.separator) {
+      while (true) {
+        let separator: AstNode | null = null;
+        try {
+          separator = config.match[1]?.separator.parse(
+            config.fileString,
+            endIndex,
+          );
+        } catch (e) {}
+        if (separator === null) break;
+        endIndex = separator.endIndex;
+      }
+    }
+  }
+  return newNodes;
+}
+
 // SECTION: Or
 export type orFormat = typeof orFormat;
 export const orFormat = "or";
@@ -220,15 +330,14 @@ export type OrPattern = ParsePattern<
   (AstNodePattern | BrokenAstNodePattern | AndPattern | TokenPattern)[]
 >;
 export type ParsedOr<T extends OrPattern> = ParsedPattern<T["match"][number]>;
-// TODO: Accept args like ...matches: T[]
 export function or<T extends any[]>(...matches: T): ParsePattern<orFormat, T> {
   return {
     format: orFormat,
     match: matches,
-    parse(fileString: string, startIndex: number) {
+    parse(fileString: string, startIndex?: number, parent?: AstNode) {
       for (const match of matches as any) {
         try {
-          return match.parse(fileString, startIndex) as any;
+          return match.parse(fileString, startIndex, parent) as any;
         } catch (e) {}
       }
       throw new Error(`Could not parse or`);
@@ -250,44 +359,12 @@ export function optional<T>(match: T): ParsePattern<optionalFormat, T> {
   return {
     format: optionalFormat,
     match,
-    parse(fileString: string, startIndex: number) {
+    parse(fileString: string, startIndex?: number, parent?: AstNode) {
       try {
-        return (match as any).parse(fileString, startIndex);
+        return (match as any).parse(fileString, startIndex, parent);
       } catch (e) {
         return null;
       }
-    },
-  };
-}
-
-// SECTION: Many
-export type manyFormat = typeof manyFormat;
-export const manyFormat = "many";
-export type ManyPattern = ParsePattern<
-  manyFormat,
-  AstNodePattern | BrokenAstNodePattern | AndPattern | OrPattern | TokenPattern
->;
-export type ParsedMany<T extends ManyPattern> = ParsedPattern<T["match"]>[];
-export function many<T>(match: T): ParsePattern<manyFormat, T> {
-  return {
-    format: manyFormat,
-    match,
-    parse(fileString: string, startIndex: number = 0) {
-      const newNodes: AstNode[] = [];
-      let endIndex = startIndex;
-      while (true) {
-        try {
-          const parseResult = (match as any).parse(fileString, endIndex);
-          if (parseResult === null) break;
-          else {
-            newNodes.push(parseResult);
-            endIndex = parseResult.endIndex;
-          }
-        } catch (e) {
-          break;
-        }
-      }
-      return newNodes;
     },
   };
 }
