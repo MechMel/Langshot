@@ -1,13 +1,11 @@
 import { LangNode, token, and, or, optional, many } from "./Langshot";
 
-class File extends LangNode.from(() => ({
-  statements: many(`StatementList`, Statement),
-})) {
+class File extends LangNode.subtype(() => [Statement]) {
   // Add whatever getters, setters, and methods you want
   get exports() {
     const exportedVars: VarDef[] = [];
     // Access the parse tree via "this"
-    for (const statement of this.statements) {
+    for (const statement of this) {
       // Check node type via "instanceof"
       if (!(statement.statement instanceof VarDef)) continue;
 
@@ -20,12 +18,12 @@ class File extends LangNode.from(() => ({
   }
 }
 
-class Statement extends LangNode.from(() => ({
+class Statement extends LangNode.subtype(() => ({
   statement: or(VarDef, VarAssign, CodeBlock),
   separator: optional(token(`Separator`, /;/)),
 })) {}
 
-class VarDef extends LangNode.from(() => ({
+class VarDef extends LangNode.subtype(() => ({
   export: optional(token(`Export`, /export/)),
   modifier: token(`Modifier`, /var|let|const/),
   ident: Ident,
@@ -40,28 +38,28 @@ class VarDef extends LangNode.from(() => ({
   }
 }
 
-class VarAssign extends LangNode.from(() => ({
+class VarAssign extends LangNode.subtype(() => ({
   ident: Ident,
   assignOp: AssignOp,
   value: or(Ident, LitNum, LitStr),
 })) {}
 
-class AssignOp extends LangNode.from(() => /=/) {}
+class AssignOp extends LangNode.subtype(() => /=/) {}
 
-class Ident extends LangNode.from(() => /_*[A-Za-z][A-Za-z0-9_]*/) {}
+class Ident extends LangNode.subtype(() => /_*[A-Za-z][A-Za-z0-9_]*/) {}
 
-class LitNum extends LangNode.from(() => /-?[0-9]+(\.[0-9]+)?/) {
+class LitNum extends LangNode.subtype(() => /-?[0-9]+(\.[0-9]+)?/) {
   get asFloat() {
     return parseFloat(this.text);
   }
 }
 
-class LitStr extends LangNode.from(() => /"([^"\\]*(\\.[^"\\]*)*)"/) {
+class LitStr extends LangNode.subtype(() => /"([^"\\]*(\\.[^"\\]*)*)"/) {
   get asString() {
     return this.text.slice(1, -1);
   }
 }
-class CodeBlock extends LangNode.from(() => ({
+class CodeBlock extends LangNode.subtype(() => ({
   openParen: token(`OpenParen`, /\(/),
   statements: many(`StatementList`, Statement),
   closeParen: token(`CloseParen`, /\)/),
@@ -70,4 +68,8 @@ class CodeBlock extends LangNode.from(() => ({
 const testFile = `const myString = "Hello, world!";
 let myNumber = 42;
 myNumber = 0;`;
-console.log(JSON.stringify(File.parse(testFile), null, 2));
+const parsed = File.parse(testFile);
+console.log(JSON.stringify(parsed, null, 2));
+console.log(parsed instanceof File); // true
+console.log(parsed instanceof Array); // false
+console.log(Array.isArray(parsed)); // true
